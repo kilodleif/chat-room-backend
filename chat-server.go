@@ -49,49 +49,66 @@ type Member struct {
 	conn     *websocket.Conn
 	msgCh    chan Message
 	endCh	 chan int
+	wg		 sync.WaitGroup
 	room     *ChatRoom
 }
 
-func (m *Member) ListenMessage() {
-	var wg sync.WaitGroup
-	wg.Add(2)
+func (m *Member) notifyExit()  {
+	m.endCh <- 0
+}
 
+func (m *Member) ListenMessage() {
 	defer func() {
 		m.room.exit <- m
 		if err := m.conn.Close(); err != nil {
-			log.Println("EXIT PROC", err)
+			log.Println("关闭ws连接失败", err)
 		}
 	}()
 
-	go m.keepWriting(wg)
-	go m.keepReading(wg)
-
-	wg.Wait()
+	m.wg.Add(2)
+	// 启动两个goroutine持续监听写和读
+	go m.keepWriting()
+	go m.keepReading()
+	// 等待两个goroutine都退出后再继续执行
+	m.wg.Wait()
 }
 
-func (m *Member) keepReading(wg sync.WaitGroup)  {
-	defer wg.Done()
+func (m *Member) keepReading()  {
+	defer m.wg.Done()
 
 	for {
-		resp := struct {
-			Message string `json:"msg"`
-		}{}
-		if err := m.conn.ReadJSON(&resp); err != nil {
-			log.Println("READ PROC", err)
+		select {
+		case <-m.endCh:
 			return
+		default:
+			resp := struct {
+				Message string `json:"msg"`
+			}{}
+			if err := m.conn.ReadJSON(&resp); err != nil {
+				log.Println("读取消息失败，goroutine退出", err)
+				// 退出前通知 keepWriting goroutine
+				m.notifyExit()
+				return
+			}
+			m.room.broadcast(NewMessage(MemberMsg, m.nickname, resp.Message))
 		}
-		m.room.broadcast(NewMessage(MemberMsg, m.nickname, resp.Message))
 	}
 }
 
-func (m *Member) keepWriting(wg sync.WaitGroup)  {
-	defer wg.Done()
+func (m *Member) keepWriting()  {
+	defer m.wg.Done()
 
 	for {
-		msg := <-m.msgCh
-		if err := m.conn.WriteJSON(msg); err != nil {
-			log.Println("WRITE PROC", err)
+		select {
+		case <-m.endCh:
 			return
+		case msg := <-m.msgCh:
+			if err := m.conn.WriteJSON(msg); err != nil {
+				log.Println("写入消息失败，goroutine退出", err)
+				// 退出前通知 keepReading goroutine
+				m.notifyExit()
+				return
+			}
 		}
 	}
 }
@@ -113,14 +130,12 @@ func (r *ChatRoom) Run() {
 		select {
 		case mem := <-r.join:
 			r.members[mem] = true
-			// ???
-			go r.broadcast(NewMessage(MemberJoin, mem.nickname,  mem.nickname + " has joined"))
+			go r.broadcast(NewMessage(MemberJoin, mem.nickname, ""))
 		case mem := <-r.exit:
 			if _, ok := r.members[mem]; ok {
 				delete(r.members, mem)
 				close(mem.msgCh)
-				// ???
-				go r.broadcast(NewMessage(MemberExit, mem.nickname, mem.nickname + " has left"))
+				go r.broadcast(NewMessage(MemberExit, mem.nickname, ""))
 			}
 		case msg := <-r.bcast:
 			for mem := range r.members {
@@ -149,6 +164,7 @@ func NewChatRoom() *ChatRoom {
 func HandleWsRequest(cr *ChatRoom, w http.ResponseWriter, r *http.Request)  {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
+		log.Println("获取ws连接出错", err)
 		return
 	}
 
@@ -158,15 +174,17 @@ func HandleWsRequest(cr *ChatRoom, w http.ResponseWriter, r *http.Request)  {
 		nickname: name,
 		conn:     conn,
 		msgCh:    make(chan Message, 128),
+		endCh:	  make(chan int),
 		room:     cr,
 	}
+
 	mem.room.join <- mem
 
 	go mem.ListenMessage()
 }
 
 func main() {
-	log.Println("server started")
+	log.Println("服务器启动")
 	room := NewChatRoom()
 	go room.Run()
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
@@ -174,6 +192,6 @@ func main() {
 	})
 
 	if err := http.ListenAndServe(LISTEN_ADDR, nil); err != nil {
-		log.Fatalln("MAIN PROC", err)
+		log.Fatalln("主程序出错，程序退出", err)
 	}
 }

@@ -15,7 +15,6 @@ type Member struct {
 	conn     *websocket.Conn
 	msgCh    chan Message
 	endCh    chan int
-	wg       sync.WaitGroup
 	room     *Room
 }
 
@@ -41,17 +40,18 @@ func (m *Member) ListenMessage() {
 		// 通知新成员加入事件
 		m.room.join <- m
 
-		m.wg.Add(2)
+		var wg sync.WaitGroup
+		wg.Add(2)
 		// 启动两个goroutine持续监听写和读
-		go m.keepWriting()
-		go m.keepReading()
+		go m.keepWriting(&wg)
+		go m.keepReading(&wg)
 		// 等待两个goroutine都退出后再继续执行
-		m.wg.Wait()
+		wg.Wait()
 	}(m)
 }
 
-func (m *Member) keepReading() {
-	defer m.wg.Done()
+func (m *Member) keepReading(wg *sync.WaitGroup) {
+	defer wg.Done()
 
 	for {
 		select {
@@ -72,8 +72,8 @@ func (m *Member) keepReading() {
 	}
 }
 
-func (m *Member) keepWriting() {
-	defer m.wg.Done()
+func (m *Member) keepWriting(wg *sync.WaitGroup) {
+	defer wg.Done()
 
 	for {
 		select {

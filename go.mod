@@ -1,4 +1,4 @@
-module main
+module gochatroom
 
 go 1.13
 

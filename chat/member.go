@@ -7,15 +7,15 @@ import (
 	"sync"
 )
 
-const messageChannelBuffer  = 128
+const messageChannelBuffer = 128
 
 type Member struct {
 	id       string
 	nickname string
 	conn     *websocket.Conn
 	msgCh    chan Message
-	endCh	 chan int
-	wg		 sync.WaitGroup
+	endCh    chan int
+	wg       sync.WaitGroup
 	room     *Room
 }
 
@@ -31,24 +31,26 @@ func NewMember(nickname string, conn *websocket.Conn, room *Room) *Member {
 }
 
 func (m *Member) ListenMessage() {
-	defer func() {
-		m.room.exit <- m
-		if err := m.conn.Close(); err != nil {
-			log.Println("关闭ws连接失败", err)
-		}
-	}()
-	// 通知新成员加入事件
-	m.room.join <- m
+	go func(m *Member) {
+		defer func(m *Member) {
+			m.room.exit <- m
+			if err := m.conn.Close(); err != nil {
+				log.Println("关闭ws连接失败", err)
+			}
+		}(m)
+		// 通知新成员加入事件
+		m.room.join <- m
 
-	m.wg.Add(2)
-	// 启动两个goroutine持续监听写和读
-	go m.keepWriting()
-	go m.keepReading()
-	// 等待两个goroutine都退出后再继续执行
-	m.wg.Wait()
+		m.wg.Add(2)
+		// 启动两个goroutine持续监听写和读
+		go m.keepWriting()
+		go m.keepReading()
+		// 等待两个goroutine都退出后再继续执行
+		m.wg.Wait()
+	}(m)
 }
 
-func (m *Member) keepReading()  {
+func (m *Member) keepReading() {
 	defer m.wg.Done()
 
 	for {
@@ -70,7 +72,7 @@ func (m *Member) keepReading()  {
 	}
 }
 
-func (m *Member) keepWriting()  {
+func (m *Member) keepWriting() {
 	defer m.wg.Done()
 
 	for {
@@ -88,6 +90,6 @@ func (m *Member) keepWriting()  {
 	}
 }
 
-func (m *Member) notifyExit()  {
+func (m *Member) notifyExit() {
 	m.endCh <- 0
 }

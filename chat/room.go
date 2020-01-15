@@ -19,29 +19,31 @@ func NewRoom() *Room {
 }
 
 func (r *Room) Run() {
-	for {
-		select {
-		case mem := <-r.join:
-			r.members[mem] = true
-			go r.broadcast(NewMessage(MemberJoin, mem.nickname, ""))
-		case mem := <-r.exit:
-			if _, ok := r.members[mem]; ok {
-				delete(r.members, mem)
-				close(mem.msgCh)
-				go r.broadcast(NewMessage(MemberExit, mem.nickname, ""))
-			}
-		case msg := <-r.bcast:
-			for mem := range r.members {
-				select {
-				case mem.msgCh <- msg:
-				default:
+	go func(r *Room) {
+		for {
+			select {
+			case mem := <-r.join:
+				r.members[mem] = true
+				go r.broadcast(NewMessage(MemberJoin, mem.nickname, ""))
+			case mem := <-r.exit:
+				if _, ok := r.members[mem]; ok {
 					delete(r.members, mem)
 					close(mem.msgCh)
+					go r.broadcast(NewMessage(MemberExit, mem.nickname, ""))
 				}
-			}
+			case msg := <-r.bcast:
+				for mem := range r.members {
+					select {
+					case mem.msgCh <- msg:
+					default:
+						delete(r.members, mem)
+						close(mem.msgCh)
+					}
+				}
 
+			}
 		}
-	}
+	}(r)
 }
 
 func (r *Room) broadcast(msg Message) {

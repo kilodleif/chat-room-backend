@@ -23,7 +23,8 @@ var addr = flag.String("addr", DefaultListenAddr, "address to listen")
 func main() {
 	log.Println("服务器启动")
 	room := chat.NewRoom()
-	go room.Run()
+	room.Run()
+
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		handleWsRequest(room, w, r)
 	})
@@ -42,6 +43,5 @@ func handleWsRequest(room *chat.Room, w http.ResponseWriter, r *http.Request) {
 
 	name := r.FormValue("name")
 	mem := chat.NewMember(name, conn, room)
-
-	go mem.ListenMessage()
+	mem.ListenMessage()
 }

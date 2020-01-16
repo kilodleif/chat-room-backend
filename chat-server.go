@@ -21,7 +21,8 @@ var upgrader = websocket.Upgrader{
 var addr = flag.String("addr", DefaultListenAddr, "address to listen")
 
 func main() {
-	log.Println("服务器启动")
+	flag.Parse()
+	log.Println("服务器启动，监听", *addr)
 	room := chat.NewRoom()
 	room.Run()
 

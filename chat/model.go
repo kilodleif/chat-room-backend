@@ -10,6 +10,8 @@ const (
 	MemberExit
 )
 
+const TimeFormat  = "2006-01-02 15:04:05"
+
 type Message struct {
 	Type      MessageType `json:"type"`
 	From      string      `json:"from"`
@@ -17,11 +19,11 @@ type Message struct {
 	Timestamp string      `json:"timestamp"`
 }
 
-func NewMessage(msgType MessageType, nickname, content string) Message {
+func NewMessage(msgType MessageType, from, content string) Message {
 	return Message{
 		Type:      msgType,
-		From:      nickname,
+		From:      from,
 		Content:   content,
-		Timestamp: time.Now().Format("2006-01-02 15:04:05"),
+		Timestamp: time.Now().Format(TimeFormat),
 	}
 }

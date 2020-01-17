@@ -5,6 +5,7 @@ import (
 	"github.com/gorilla/websocket"
 	"log"
 	"sync"
+	"time"
 )
 
 const messageChannelBuffer = 128
@@ -12,26 +13,34 @@ const messageChannelBuffer = 128
 type Member struct {
 	id       string
 	nickname string
-	conn     *websocket.Conn
-	msgCh    chan Message
-	endCh    chan int
-	room     *Room
+	joinTime string
 }
 
-func NewMember(nickname string, conn *websocket.Conn, room *Room) *Member {
-	return &Member{
-		id:       uuid.New().String(),
-		nickname: nickname,
-		conn:     conn,
-		msgCh:    make(chan Message, messageChannelBuffer),
-		endCh:    make(chan int),
-		room:     room,
+type MemberControl struct {
+	conn   *websocket.Conn
+	msgCh  chan Message
+	endCh  chan int
+	member *Member
+	room   *RoomControl
+}
+
+func NewMemberControl(nickname string, conn *websocket.Conn, room *RoomControl) *MemberControl {
+	return &MemberControl{
+		conn:  conn,
+		msgCh: make(chan Message, messageChannelBuffer),
+		endCh: make(chan int),
+		member: &Member{
+			id:       uuid.New().String(),
+			nickname: nickname,
+			joinTime: time.Now().Format(TimeFormat),
+		},
+		room: room,
 	}
 }
 
-func (m *Member) ListenMessage() {
-	go func(m *Member) {
-		defer func(m *Member) {
+func (c *MemberControl) ListenMessage() {
+	go func(m *MemberControl) {
+		defer func(m *MemberControl) {
 			m.room.exit <- m
 			if err := m.conn.Close(); err != nil {
 				log.Println("关闭ws连接失败", err)
@@ -47,49 +56,49 @@ func (m *Member) ListenMessage() {
 		go m.keepReading(&wg)
 		// 等待两个goroutine都退出后再继续执行
 		wg.Wait()
-	}(m)
+	}(c)
 }
 
-func (m *Member) keepReading(wg *sync.WaitGroup) {
+func (c *MemberControl) keepReading(wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	for {
 		select {
-		case <-m.endCh:
+		case <-c.endCh:
 			return
 		default:
 			resp := struct {
 				Message string `json:"msg"`
 			}{}
-			if err := m.conn.ReadJSON(&resp); err != nil {
+			if err := c.conn.ReadJSON(&resp); err != nil {
 				log.Println("读取消息失败，goroutine退出", err)
 				// 退出前通知 keepWriting goroutine
-				m.notifyExit()
+				c.notifyExit()
 				return
 			}
-			m.room.broadcast(NewMessage(MemberMsg, m.nickname, resp.Message))
+			c.room.broadcastMessage(NewMessage(MemberMsg, c.member.nickname, resp.Message))
 		}
 	}
 }
 
-func (m *Member) keepWriting(wg *sync.WaitGroup) {
+func (c *MemberControl) keepWriting(wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	for {
 		select {
-		case <-m.endCh:
+		case <-c.endCh:
 			return
-		case msg := <-m.msgCh:
-			if err := m.conn.WriteJSON(msg); err != nil {
+		case msg := <-c.msgCh:
+			if err := c.conn.WriteJSON(msg); err != nil {
 				log.Println("写入消息失败，goroutine退出", err)
 				// 退出前通知 keepReading goroutine
-				m.notifyExit()
+				c.notifyExit()
 				return
 			}
 		}
 	}
 }
 
-func (m *Member) notifyExit() {
-	m.endCh <- 0
+func (c *MemberControl) notifyExit() {
+	c.endCh <- 0
 }

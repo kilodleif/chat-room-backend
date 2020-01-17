@@ -1,51 +1,85 @@
 package chat
 
+import (
+	"github.com/google/uuid"
+	"time"
+)
+
+const maxMemberCountPerRoom = 20
+
 type Room struct {
-	members     map[*Member]bool
-	join        chan *Member
-	exit        chan *Member
-	bcast       chan Message
-	memberCount int
+	id          string
+	maxJoins    int
+	curJoins    int
+	createTime  string
+	lastActTime string
 }
 
-func NewRoom() *Room {
-	return &Room{
-		members:     make(map[*Member]bool),
-		join:        make(chan *Member),
-		exit:        make(chan *Member),
-		bcast:       make(chan Message),
-		memberCount: 0,
+type RoomControl struct {
+	room        *Room
+	join        chan *MemberControl
+	exit        chan *MemberControl
+	broadcast   chan Message
+	memControls map[*MemberControl]bool
+}
+
+func NewRoomControl() *RoomControl {
+	nowStr := time.Now().Format(TimeFormat)
+	return &RoomControl{
+		room: &Room{
+			id:          uuid.New().String(),
+			maxJoins:    maxMemberCountPerRoom,
+			curJoins:    0,
+			createTime:  nowStr,
+			lastActTime: nowStr,
+		},
+		memControls: make(map[*MemberControl]bool),
+		join:        make(chan *MemberControl),
+		exit:        make(chan *MemberControl),
+		broadcast:   make(chan Message),
 	}
 }
 
-func (r *Room) Run() {
-	go func(r *Room) {
+func (c *RoomControl) Run() {
+	go func(r *RoomControl) {
 		for {
 			select {
-			case mem := <-r.join:
-				r.members[mem] = true
-				go r.broadcast(NewMessage(MemberJoin, mem.nickname, ""))
-			case mem := <-r.exit:
-				if _, ok := r.members[mem]; ok {
-					delete(r.members, mem)
-					close(mem.msgCh)
-					go r.broadcast(NewMessage(MemberExit, mem.nickname, ""))
+			case mCtrl := <-r.join:
+				r.memControls[mCtrl] = true
+				go r.broadcastMessage(
+					NewMessage(
+						MemberJoin,
+						mCtrl.member.nickname,
+						"",
+					),
+				)
+			case mCtrl := <-r.exit:
+				if _, ok := r.memControls[mCtrl]; ok {
+					delete(r.memControls, mCtrl)
+					close(mCtrl.msgCh)
+					go r.broadcastMessage(
+						NewMessage(
+							MemberExit,
+							mCtrl.member.nickname,
+							"",
+						),
+					)
 				}
-			case msg := <-r.bcast:
-				for mem := range r.members {
+			case msg := <-r.broadcast:
+				for mCtrl := range r.memControls {
 					select {
-					case mem.msgCh <- msg:
+					case mCtrl.msgCh <- msg:
 					default:
-						delete(r.members, mem)
-						close(mem.msgCh)
+						delete(r.memControls, mCtrl)
+						close(mCtrl.msgCh)
 					}
 				}
 
 			}
 		}
-	}(r)
+	}(c)
 }
 
-func (r *Room) broadcast(msg Message) {
-	r.bcast <- msg
+func (c *RoomControl) broadcastMessage(msg Message) {
+	c.broadcast <- msg
 }

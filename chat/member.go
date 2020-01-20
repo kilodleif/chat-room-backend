@@ -17,14 +17,14 @@ type Member struct {
 }
 
 type MemberControl struct {
-	conn   *websocket.Conn
-	msgCh  chan Message
-	endCh  chan int
-	member *Member
-	room   *RoomControl
+	conn     *websocket.Conn
+	msgCh    chan Message
+	endCh    chan int
+	member   *Member
+	roomCtrl *RoomControl
 }
 
-func NewMemberControl(nickname string, conn *websocket.Conn, room *RoomControl) *MemberControl {
+func NewMemberControl(nickname string, conn *websocket.Conn, roomCtrl *RoomControl) *MemberControl {
 	return &MemberControl{
 		conn:  conn,
 		msgCh: make(chan Message, messageChannelBuffer),
@@ -34,26 +34,26 @@ func NewMemberControl(nickname string, conn *websocket.Conn, room *RoomControl) 
 			nickname: nickname,
 			joinTime: time.Now().Format(TimeFormat),
 		},
-		room: room,
+		roomCtrl: roomCtrl,
 	}
 }
 
 func (c *MemberControl) ListenMessage() {
-	go func(m *MemberControl) {
-		defer func(m *MemberControl) {
-			m.room.exit <- m
-			if err := m.conn.Close(); err != nil {
+	go func(c *MemberControl) {
+		defer func(c *MemberControl) {
+			c.roomCtrl.exit <- c
+			if err := c.conn.Close(); err != nil {
 				log.Println("关闭ws连接失败", err)
 			}
-		}(m)
+		}(c)
 		// 通知新成员加入事件
-		m.room.join <- m
+		c.roomCtrl.join <- c
 
 		var wg sync.WaitGroup
 		wg.Add(2)
 		// 启动两个goroutine持续监听写和读
-		go m.keepWriting(&wg)
-		go m.keepReading(&wg)
+		go c.keepWriting(&wg)
+		go c.keepReading(&wg)
 		// 等待两个goroutine都退出后再继续执行
 		wg.Wait()
 	}(c)
@@ -76,7 +76,7 @@ func (c *MemberControl) keepReading(wg *sync.WaitGroup) {
 				c.notifyExit()
 				return
 			}
-			c.room.broadcastMessage(NewMessage(MemberMsg, c.member.nickname, resp.Message))
+			c.roomCtrl.broadcastMessage(NewMessage(MemberMsg, c.member.nickname, resp.Message))
 		}
 	}
 }

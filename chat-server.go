@@ -23,11 +23,11 @@ var addr = flag.String("addr", DefaultListenAddr, "address to listen")
 func main() {
 	flag.Parse()
 	log.Println("服务器启动，监听", *addr)
-	room := chat.NewRoomControl()
-	room.Run()
+	roomCtrl := chat.NewRoomControl()
+	roomCtrl.Run()
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		handleWsRequest(room, w, r)
+		handleWsRequest(roomCtrl, w, r)
 	})
 
 	if err := http.ListenAndServe(*addr, nil); err != nil {

@@ -8,11 +8,11 @@ import (
 const maxMemberCountPerRoom = 20
 
 type Room struct {
-	id          string
-	maxJoins    int
-	curJoins    int
-	createTime  string
-	lastActTime string
+	Id          string `json:"id"`
+	MaxJoins    int    `json:"max_joins"`
+	CurJoins    int    `json:"cur_joins"`
+	CreateTime  string `json:"create_time"`
+	LastActTime string `json:"last_act_time"`
 }
 
 type RoomControl struct {
@@ -27,11 +27,11 @@ func NewRoomControl() *RoomControl {
 	nowStr := time.Now().Format(TimeFormat)
 	return &RoomControl{
 		room: &Room{
-			id:          uuid.New().String(),
-			maxJoins:    maxMemberCountPerRoom,
-			curJoins:    0,
-			createTime:  nowStr,
-			lastActTime: nowStr,
+			Id:          uuid.New().String(),
+			MaxJoins:    maxMemberCountPerRoom,
+			CurJoins:    0,
+			CreateTime:  nowStr,
+			LastActTime: nowStr,
 		},
 		memControls: make(map[*MemberControl]bool),
 		join:        make(chan *MemberControl),
@@ -49,7 +49,7 @@ func (c *RoomControl) Run() {
 				go r.broadcastMessage(
 					NewMessage(
 						MemberJoin,
-						mCtrl.member.nickname,
+						mCtrl.member.Nickname,
 						"",
 					),
 				)
@@ -60,7 +60,7 @@ func (c *RoomControl) Run() {
 					go r.broadcastMessage(
 						NewMessage(
 							MemberExit,
-							mCtrl.member.nickname,
+							mCtrl.member.Nickname,
 							"",
 						),
 					)

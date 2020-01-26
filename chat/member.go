@@ -11,9 +11,9 @@ import (
 const messageChannelBuffer = 128
 
 type Member struct {
-	id       string
-	nickname string
-	joinTime string
+	Id       string `json:"id"`
+	Nickname string `json:"nickname"`
+	JoinTime string `json:"join_time"`
 }
 
 type MemberControl struct {
@@ -30,9 +30,9 @@ func NewMemberControl(nickname string, conn *websocket.Conn, roomCtrl *RoomContr
 		msgCh: make(chan Message, messageChannelBuffer),
 		endCh: make(chan int),
 		member: &Member{
-			id:       uuid.New().String(),
-			nickname: nickname,
-			joinTime: time.Now().Format(TimeFormat),
+			Id:       uuid.New().String(),
+			Nickname: nickname,
+			JoinTime: time.Now().Format(TimeFormat),
 		},
 		roomCtrl: roomCtrl,
 	}
@@ -76,7 +76,7 @@ func (c *MemberControl) keepReading(wg *sync.WaitGroup) {
 				c.notifyExit()
 				return
 			}
-			c.roomCtrl.broadcastMessage(NewMessage(MemberMsg, c.member.nickname, resp.Message))
+			c.roomCtrl.broadcastMessage(NewMessage(MemberMsg, c.member.Nickname, resp.Message))
 		}
 	}
 }

@@ -11,9 +11,9 @@ import (
 // gochat.member.<member_id>  --> json string
 const (
 	// 聊天室redis key前缀
-	roomKeyPrefix = "gochat.room."
+	roomKeyPrefix = "gochat:room:"
 	// 用户redis key前缀
-	memberKeyPrefix = "gochat.member."
+	memberKeyPrefix = "gochat:member:"
 )
 
 var client *redis.Client

@@ -40,10 +40,14 @@ func SaveRoom(roomId string, room *chat.Room)  {
 // 获取指定聊天室信息
 func RetrieveRoom(roomId string) chat.Room {
 	var room chat.Room
-	result := client.Get(roomId).String()
-	err := json.Unmarshal([]byte(result), &room)
-	if err != nil {
-		log.Println("反序列化room结果时出错", err)
+	result, err1 := client.HGet(roomKey, roomId).Result()
+	if err1 != nil {
+		log.Println("获取room数据出错", err1)
+	}
+	log.Println("retrieve room result", result)
+	err2 := json.Unmarshal([]byte(result), &room)
+	if err2 != nil {
+		log.Println("反序列化room结果时出错", err2)
 	}
 	return room
 }
@@ -78,10 +82,13 @@ func SaveMember(memberId string, member *chat.Member)  {
 // 获取指定用户信息
 func RetrieveMember(memberId string) chat.Member {
 	var member chat.Member
-	result := client.HGet(memberKey, memberId).String()
-	err := json.Unmarshal([]byte(result), &member)
-	if err != nil {
-		log.Println("反序列化member结果时出错", err)
+	result, err1 := client.HGet(memberKey, memberId).Result()
+	if err1 != nil {
+		log.Println("获取member数据出错", err1)
+	}
+	err2 := json.Unmarshal([]byte(result), &member)
+	if err2 != nil {
+		log.Println("反序列化member结果时出错", err2)
 	}
 	return member
 }

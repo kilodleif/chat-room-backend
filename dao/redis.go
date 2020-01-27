@@ -15,7 +15,7 @@ const (
 	// 用户hash key
 	memberKey = "gochat:member"
 	// 聊天室-成员set前缀
-	roomMemberListKeyPrefix = "gochat:room-member:"
+	roomMemberSetKeyPrefix = "gochat:room-member:"
 )
 
 var client *redis.Client
@@ -106,19 +106,19 @@ func RetrieveAllMembers() []chat.Member {
 
 // 聊天成员进入聊天室
 func MemberRoomEnter(roomId, memberId string)  {
-	key := roomMemberListKeyPrefix + roomId
+	key := roomMemberSetKeyPrefix + roomId
 	client.SAdd(key, memberId)
 }
 
 // 聊天成员退出聊天室
 func MemberRoomExit(roomId, memberId string)  {
-	key := roomMemberListKeyPrefix + roomId
+	key := roomMemberSetKeyPrefix + roomId
 	client.SRem(key, memberId)
 }
 
 // 获取聊天室所有成员id
 func RetrieveRoomAllMembers(roomId string) []string {
-	key := roomMemberListKeyPrefix + roomId
+	key := roomMemberSetKeyPrefix + roomId
 	result, err := client.SMembers(key).Result()
 	if err != nil {
 		log.Println("获取聊天室成员信息出错", err)
